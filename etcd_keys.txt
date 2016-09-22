@@ -1,0 +1,90 @@
+===
+gen certs and extend cluster
+
+*** CA for etcd (selfsigned) ***
+
+export SAN=etcd-signer
+openssl req \
+	-config openssl.cnf -newkey rsa:4096 \
+	-keyout ca.key -new -out ca.crt \
+	-x509 -extensions etcd_v3_ca_self \
+	-batch -nodes \
+        -days 365 \
+        -subj /CN=etcd-signer\@$(date +%s)
+
+*** Certs for etcd members ***
+
+export SAN="IP:10.34.85.55"
+export CN=master1.usersys.redhat.com
+
+export SAN="IP:10.34.84.99"
+export CN=master2.usersys.redhat.com
+
+export SAN="IP:10.34.85.213"
+export CN=master3.usersys.redhat.com
+
+export PREFIX="./etcd-$CN/"
+mkdir -p ${PREFIX}
+
+# Create the server csr
+openssl req -new -keyout ${PREFIX}server.key \
+    -config openssl.cnf \
+    -out ${PREFIX}server.csr \
+    -reqexts etcd_v3_req -batch -nodes \
+    -subj /CN=$CN
+    
+# Sign and create the server crt
+openssl ca -name etcd_ca -config openssl.cnf \
+    -out ${PREFIX}server.crt \
+    -in ${PREFIX}server.csr \
+    -extensions etcd_v3_ca_server -batch
+     
+# Create the peer csr
+openssl req -new -keyout ${PREFIX}peer.key \
+    -config openssl.cnf \
+    -out ${PREFIX}peer.csr \
+    -reqexts etcd_v3_req -batch -nodes \
+    -subj /CN=$CN
+
+# Sign and create the peer crt
+openssl ca -name etcd_ca -config openssl.cnf \
+    -out ${PREFIX}peer.crt \
+    -in ${PREFIX}peer.csr \
+    -extensions etcd_v3_ca_peer -batch
+
+copy ca.crt and ./prefix/* to /etc/etcd on a corresponding node
+scp ${PREFIX}* $CN:/etc/etcd/
+scp ca.crt $CN:/etc/etcd/
+
+
+*** certs for masters ***
+
+export SAN="IP:10.34.85.55"
+export CN=master1.usersys.redhat.com
+
+export SAN="IP:10.34.84.99"
+export CN=master2.usersys.redhat.com
+
+export SAN="IP:10.34.85.213"
+export CN=master3.usersys.redhat.com
+
+export PREFIX="./origin-$CN/"
+mkdir -p ${PREFIX}
+
+# Create the client csr
+openssl req -new -keyout ${PREFIX}master.etcd-client.key \
+    -config openssl.cnf \
+    -out ${PREFIX}master.etcd-client.csr \
+    -reqexts etcd_v3_req -batch -nodes \
+    -subj /CN=$CN
+
+# Sign and create the client crt
+openssl ca -name etcd_ca -config openssl.cnf \
+    -out ${PREFIX}master.etcd-client.crt \
+    -in ${PREFIX}master.etcd-client.csr \
+    -extensions etcd_v3_ca_client -batch
+
+scp ${PREFIX}* $CN:/etc/origin/master/
+scp ca.crt $CN:/etc/origin/master/master.etcd-ca.crt
+
+===
