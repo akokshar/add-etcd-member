@@ -1,4 +1,4 @@
-1. curent status of the system:
+*1. curent status of the system:*
 
 root@master1 # oc get nodes --show-all 
 NAME                           STATUS                     AGE
